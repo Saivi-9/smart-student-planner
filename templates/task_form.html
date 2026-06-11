@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="form-panel">
+  <h1>{{ task and 'Edit task' or 'Create task' }}</h1>
+  <form method="post" class="form-card">
+    <label>Task name</label>
+    <input type="text" name="title" value="{{ task.title if task else '' }}" placeholder="Write a task title" required />
+
+    <label>Description</label>
+    <textarea name="description" placeholder="Add details or study notes">{{ task.description if task else '' }}</textarea>
+
+    <label>Due date</label>
+    <input type="date" name="due_date" value="{{ task.due_date|format_date if task and task.due_date else '' }}" />
+
+    <label>Priority</label>
+    <select name="priority">
+      {% for option in ['High', 'Medium', 'Low'] %}
+      <option value="{{ option }}" {% if task and task.priority == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+
+    <label>Status</label>
+    <select name="status">
+      {% for option in ['Not started', 'In progress', 'Completed'] %}
+      <option value="{{ option }}" {% if task and task.status == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="primary-button">{{ task and 'Save changes' or 'Create task' }}</button>
+  </form>
+</section>
+{% endblock %}

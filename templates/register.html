@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="auth-panel">
+  <h1>Create Account</h1>
+  <form method="post" class="form-card">
+    <label>Username</label>
+    <input type="text" name="username" placeholder="Your name" required />
+    <label>Email</label>
+    <input type="email" name="email" placeholder="student@example.com" required />
+    <label>Password</label>
+    <input type="password" name="password" placeholder="Create a password" required />
+    <label>Confirm Password</label>
+    <input type="password" name="confirm_password" placeholder="Confirm password" required />
+    <button type="submit" class="primary-button">Register</button>
+  </form>
+  <p class="alt-action">
+    Already registered? <a href="{{ url_for('login') }}">Sign in</a>.
+  </p>
+</section>
+{% endblock %}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Student Planner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand">
+        <a href="{{ url_for('dashboard') }}">Smart Student Planner</a>
+      </div>
+      {% if current_user.is_authenticated %}
+      <nav class="top-nav">
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('new_task') }}">New Task</a>
+        <a href="{{ url_for('grades') }}">Grades</a>
+        <a href="{{ url_for('logout') }}">Log out</a>
+      </nav>
+      {% endif %}
+      <button id="theme-toggle" class="theme-toggle">Dark Mode</button>
+    </header>
+
+    <main class="main-content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <section class="flash-list">
+        {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      <p>Smart Student Planner • Built with Flask and SQLite</p>
+    </footer>
+  </body>
+</html>

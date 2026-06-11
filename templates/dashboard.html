@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="dashboard-grid">
+  <article class="dashboard-card">
+    <h2>Quick Stats</h2>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-value">{{ tasks|length }}</span>
+        <span class="stat-label">Total tasks</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">{{ upcoming|length }}</span>
+        <span class="stat-label">Due soon</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">{{ gpa }}</span>
+        <span class="stat-label">Current GPA</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">{{ grades|length }}</span>
+        <span class="stat-label">Grades recorded</span>
+      </div>
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-header">
+      <h2>Task list</h2>
+      <a href="{{ url_for('new_task') }}" class="secondary-button">Add task</a>
+    </div>
+    {% if tasks %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Due date</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr class="{% if task.due_date and task.due_date <= today %}due-soon{% endif %}">
+          <td>{{ task.title }}</td>
+          <td>{{ task.due_date|format_date }}</td>
+          <td>{{ task.priority }}</td>
+          <td>{{ task.status }}</td>
+          <td class="table-actions">
+            <a href="{{ url_for('edit_task', task_id=task.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('delete_task', task_id=task.id) }}" class="inline-form">
+              <button type="submit" class="danger-button">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No tasks yet. Create your first task to stay on top of deadlines.</p>
+    {% endif %}
+  </article>
+
+  <article class="panel calendar-panel">
+    <div class="panel-header">
+      <h2>Deadline calendar</h2>
+      <a href="{{ url_for('grades') }}" class="secondary-button">Track GPA</a>
+    </div>
+    <div id="calendar-container" class="calendar-container">
+      <p class="calendar-message">Loading upcoming deadlines…</p>
+    </div>
+  </article>
+</section>
+
+<section class="notes-panel">
+  <article class="panel">
+    <h2>Upcoming reminders</h2>
+    {% if upcoming %}
+    <ul class="reminder-list">
+      {% for task in upcoming %}
+      <li>
+        <strong>{{ task.title }}</strong>
+        <span>{{ task.due_date|format_date }} • {{ task.priority }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-state">No tasks due in the next three days. Keep adding tasks.</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}
