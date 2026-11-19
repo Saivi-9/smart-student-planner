@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import LoginManager, current_user, login_user, login_required, logout_user
@@ -9,9 +9,32 @@ from config import Config
 from models import db, User, Task, Grade
 
 
-def create_app():
+def parse_date(value):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def calculate_gpa(entries):
+    if not entries:
+        return 0.0
+
+    total_credits = sum(entry.credits for entry in entries)
+    if total_credits <= 0:
+        return 0.0
+
+    total_points = sum(GRADE_POINTS.get(entry.grade, 0.0) * entry.credits for entry in entries)
+    return round(total_points / total_credits, 2)
+
+
+def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
     os.makedirs(app.instance_path, exist_ok=True)
 
     db.init_app(app)
@@ -23,10 +46,14 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))
 
     with app.app_context():
         db.create_all()
+
+    @app.route("/api/health")
+    def api_health():
+        return jsonify({"status": "healthy", "service": "smart-student-planner"})
 
     @app.route("/")
     @login_required
@@ -34,7 +61,7 @@ def create_app():
         tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.due_date.asc()).all()
         grades = Grade.query.filter_by(user_id=current_user.id).all()
         gpa = calculate_gpa(grades)
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         upcoming = [task for task in tasks if task.due_date and task.due_date <= today + timedelta(days=3)]
         return render_template("dashboard.html", tasks=tasks, grades=grades, gpa=gpa, upcoming=upcoming, today=today)
 
@@ -213,31 +240,19 @@ def create_app():
     def format_date(value):
         return value.strftime("%Y-%m-%d") if value else ""
 
-    def parse_date(value):
-        if not value:
-            return None
-        try:
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        except ValueError:
-            return None
-
-    def priority_color(priority):
-        return {
-            "High": "#e74c3c",
-            "Medium": "#f39c12",
-            "Low": "#27ae60",
-        }.get(priority, "#3498db")
-
-    def calculate_gpa(entries):
-        if not entries:
-            return 0.0
-
-        total_credits = sum(entry.credits for entry in entries)
-        if total_credits <= 0:
-            return 0.0
-
-        total_points = sum(GRADE_POINTS.get(entry.grade, 0.0) * entry.credits for entry in entries)
-        return round(total_points / total_credits, 2)
+    @app.route("/api/stats")
+    @login_required
+    def api_stats():
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        grades = Grade.query.filter_by(user_id=current_user.id).all()
+        completed = sum(1 for t in tasks if t.status.lower() == "completed")
+        return jsonify({
+            "total_tasks": len(tasks),
+            "completed_tasks": completed,
+            "pending_tasks": len(tasks) - completed,
+            "gpa": calculate_gpa(grades),
+            "courses_recorded": len(grades),
+        })
 
     return app
 
