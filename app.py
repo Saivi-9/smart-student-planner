@@ -30,6 +30,16 @@ def calculate_gpa(entries):
     return round(total_points / total_credits, 2)
 
 
+def get_academic_standing(gpa, courses_count):
+    if courses_count <= 0:
+        return "No Grades Recorded"
+    if gpa >= 3.7:
+        return "Dean's List"
+    if gpa >= 2.0:
+        return "Good Standing"
+    return "Academic Warning"
+
+
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
@@ -152,7 +162,11 @@ def create_app(test_config=None):
         task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
 
         if request.method == "POST":
-            task.title = request.form.get("title", "").strip()
+            new_title = request.form.get("title", "").strip()
+            if not new_title:
+                flash("Task title is required.", "warning")
+                return render_template("task_form.html", task=task)
+            task.title = new_title
             task.description = request.form.get("description", "").strip()
             task.due_date = parse_date(request.form.get("due_date"))
             task.priority = request.form.get("priority", "Medium")
@@ -246,13 +260,48 @@ def create_app(test_config=None):
         tasks = Task.query.filter_by(user_id=current_user.id).all()
         grades = Grade.query.filter_by(user_id=current_user.id).all()
         completed = sum(1 for t in tasks if t.status.lower() == "completed")
+        today = datetime.now(timezone.utc).date()
+        overdue = sum(
+            1 for t in tasks
+            if t.due_date and t.due_date < today and t.status.lower() != "completed"
+        )
+        gpa_val = calculate_gpa(grades)
         return jsonify({
             "total_tasks": len(tasks),
             "completed_tasks": completed,
             "pending_tasks": len(tasks) - completed,
-            "gpa": calculate_gpa(grades),
+            "overdue_tasks": overdue,
+            "gpa": gpa_val,
             "courses_recorded": len(grades),
+            "academic_standing": get_academic_standing(gpa_val, len(grades)),
         })
+
+    @app.route("/api/tasks/upcoming")
+    @login_required
+    def api_tasks_upcoming():
+        try:
+            days = max(1, min(90, int(request.args.get("days", 7))))
+        except ValueError:
+            days = 7
+        today = datetime.now(timezone.utc).date()
+        horizon = today + timedelta(days=days)
+        tasks = (
+            Task.query.filter_by(user_id=current_user.id)
+            .order_by(Task.due_date.asc())
+            .all()
+        )
+        upcoming_items = [
+            {
+                "id": t.id,
+                "title": t.title,
+                "due_date": t.due_date.isoformat(),
+                "priority": t.priority,
+                "status": t.status,
+            }
+            for t in tasks
+            if t.due_date and today <= t.due_date <= horizon and t.status.lower() != "completed"
+        ]
+        return jsonify({"window_days": days, "count": len(upcoming_items), "tasks": upcoming_items})
 
     return app
 
