@@ -1,12 +1,15 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
-from flask_login import LoginManager, current_user, login_user, login_required, logout_user
-from werkzeug.security import check_password_hash, generate_password_hash
+try:
+    from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
+    from flask_login import LoginManager, current_user, login_user, login_required, logout_user
+    from werkzeug.security import check_password_hash, generate_password_hash
+    from config import Config
+    from models import db, User, Task, Grade
+except ImportError:  # pragma: no cover - allow pure GPA & date utility imports in lightweight test runners
+    Flask = None
 
-from config import Config
-from models import db, User, Task, Grade
 
 
 def parse_date(value):
@@ -38,6 +41,25 @@ def get_academic_standing(gpa, courses_count):
     if gpa >= 2.0:
         return "Good Standing"
     return "Academic Warning"
+
+
+def calculate_target_gpa_credits(entries, target_gpa, future_grade="A"):
+    """Calculate additional credits at future_grade required to achieve target_gpa."""
+    future_points = GRADE_POINTS.get(future_grade.upper(), 4.0)
+    total_credits = sum(entry.credits for entry in entries if entry.credits > 0)
+    total_points = sum(GRADE_POINTS.get(entry.grade, 0.0) * entry.credits for entry in entries if entry.credits > 0)
+
+    current_gpa = (total_points / total_credits) if total_credits > 0 else 0.0
+    if total_credits > 0 and current_gpa >= target_gpa:
+        return 0.0
+    if total_credits == 0:
+        return 0.0 if target_gpa <= future_points else None
+    if target_gpa >= future_points:
+        return None
+
+    needed = (target_gpa * total_credits - total_points) / (future_points - target_gpa)
+    return round(max(0.0, needed), 2)
+
 
 
 def create_app(test_config=None):
@@ -302,6 +324,32 @@ def create_app(test_config=None):
             if t.due_date and today <= t.due_date <= horizon and t.status.lower() != "completed"
         ]
         return jsonify({"window_days": days, "count": len(upcoming_items), "tasks": upcoming_items})
+
+    @app.route("/api/gpa/target")
+    @login_required
+    def api_gpa_target():
+        try:
+            target = max(0.0, min(4.0, float(request.args.get("target", 3.7))))
+        except ValueError:
+            target = 3.7
+        assumed_grade = request.args.get("assumed_grade", "A").strip().upper()
+        if assumed_grade not in GRADE_POINTS:
+            assumed_grade = "A"
+
+        grades = Grade.query.filter_by(user_id=current_user.id).all()
+        current_gpa = calculate_gpa(grades)
+        total_credits = round(sum(g.credits for g in grades), 2)
+        required_credits = calculate_target_gpa_credits(grades, target, assumed_grade)
+
+        return jsonify({
+            "current_gpa": current_gpa,
+            "completed_credits": total_credits,
+            "academic_standing": get_academic_standing(current_gpa, len(grades)),
+            "target_gpa": target,
+            "assumed_grade": assumed_grade,
+            "required_credits": required_credits,
+            "achievable": required_credits is not None,
+        })
 
     return app
 

@@ -1,6 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from app import create_app, calculate_gpa, get_academic_standing, parse_date
+import pytest
+from app import (
+    create_app,
+    calculate_gpa,
+    calculate_target_gpa_credits,
+    get_academic_standing,
+    parse_date,
+)
 
 
 def test_parse_date_valid_and_invalid():
@@ -22,9 +29,15 @@ def test_calculate_gpa_and_academic_standing():
     assert get_academic_standing(3.57, 2) == "Good Standing"
     assert get_academic_standing(1.65, 2) == "Academic Warning"
     assert get_academic_standing(0.0, 0) == "No Grades Recorded"
+    # 7 credits totaling 25.0 quality points -> need 3.0 credits of A (4.0) to reach 3.70
+    assert calculate_target_gpa_credits(entries, 3.7, "A") == 3.0
+    assert calculate_target_gpa_credits(entries, 3.5, "A") == 0.0
+    assert calculate_target_gpa_credits(entries, 4.0, "A") is None
+
 
 
 def test_health_and_auth_flow():
+    pytest.importorskip("flask")
     app = create_app({
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
@@ -86,3 +99,15 @@ def test_health_and_auth_flow():
     assert stats_json["total_tasks"] == 2
     assert stats_json["overdue_tasks"] == 1
     assert stats_json["academic_standing"] == "No Grades Recorded"
+
+    client.post("/grades/new", data={"course": "Algorithms", "credits": "4", "grade": "A"}, follow_redirects=True)
+    client.post("/grades/new", data={"course": "Databases", "credits": "3", "grade": "B"}, follow_redirects=True)
+
+    target_res = client.get("/api/gpa/target?target=3.7&assumed_grade=A")
+    assert target_res.status_code == 200
+    target_json = target_res.get_json()
+    assert target_json["current_gpa"] == 3.57
+    assert target_json["completed_credits"] == 7.0
+    assert target_json["required_credits"] == 3.0
+    assert target_json["achievable"] is True
+
