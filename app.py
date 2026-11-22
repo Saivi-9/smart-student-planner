@@ -61,6 +61,80 @@ def calculate_target_gpa_credits(entries, target_gpa, future_grade="A"):
     return round(max(0.0, needed), 2)
 
 
+def summarize_task_workload(tasks, today=None):
+    """Compute priority breakdown, completion rate, and deadline urgency counts across tasks."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    by_priority = {"High": 0, "Medium": 0, "Low": 0}
+    completed = 0
+    overdue = 0
+    due_today = 0
+    high_priority_pending = 0
+
+    for t in tasks:
+        status_low = (getattr(t, "status", "") or "").lower()
+        prio = (getattr(t, "priority", "Medium") or "Medium").capitalize()
+        if prio not in by_priority:
+            by_priority[prio] = 0
+        by_priority[prio] += 1
+
+        if status_low == "completed":
+            completed += 1
+        else:
+            if prio == "High":
+                high_priority_pending += 1
+            due = getattr(t, "due_date", None)
+            if due:
+                if due < today:
+                    overdue += 1
+                elif due == today:
+                    due_today += 1
+
+    total = len(tasks)
+    completion_rate = round((completed / total) * 100.0, 1) if total > 0 else 0.0
+    return {
+        "total_tasks": total,
+        "completed_tasks": completed,
+        "pending_tasks": total - completed,
+        "completion_rate_pct": completion_rate,
+        "overdue_tasks": overdue,
+        "due_today_tasks": due_today,
+        "high_priority_pending": high_priority_pending,
+        "priority_breakdown": by_priority,
+    }
+
+
+
+def summarize_task_priorities(tasks):
+    """Aggregate pending and completed task counts by priority tier and compute completion percentage."""
+    tiers = ("High", "Medium", "Low")
+    breakdown = {tier: {"total": 0, "pending": 0, "completed": 0} for tier in tiers}
+    total_completed = 0
+
+    for task in tasks:
+        raw_priority = (getattr(task, "priority", None) or "Medium").strip().capitalize()
+        tier = raw_priority if raw_priority in breakdown else "Medium"
+        is_done = (getattr(task, "status", "") or "").strip().lower() == "completed"
+        breakdown[tier]["total"] += 1
+        if is_done:
+            breakdown[tier]["completed"] += 1
+            total_completed += 1
+        else:
+            breakdown[tier]["pending"] += 1
+
+    total = len(tasks)
+    completion_rate = round((total_completed / total) * 100.0, 1) if total > 0 else 0.0
+    return {
+        "total_tasks": total,
+        "completed_tasks": total_completed,
+        "pending_tasks": total - total_completed,
+        "completion_rate_pct": completion_rate,
+        "by_priority": breakdown,
+    }
+
+
+
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
@@ -350,6 +424,12 @@ def create_app(test_config=None):
             "required_credits": required_credits,
             "achievable": required_credits is not None,
         })
+
+    @app.route("/api/tasks/priority-breakdown")
+    @login_required
+    def api_tasks_priority_breakdown():
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        return jsonify(summarize_task_priorities(tasks))
 
     return app
 

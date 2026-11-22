@@ -7,6 +7,8 @@ from app import (
     calculate_target_gpa_credits,
     get_academic_standing,
     parse_date,
+    summarize_task_priorities,
+    summarize_task_workload,
 )
 
 
@@ -33,6 +35,39 @@ def test_calculate_gpa_and_academic_standing():
     assert calculate_target_gpa_credits(entries, 3.7, "A") == 3.0
     assert calculate_target_gpa_credits(entries, 3.5, "A") == 0.0
     assert calculate_target_gpa_credits(entries, 4.0, "A") is None
+
+
+def test_summarize_task_workload():
+    today = datetime(2026, 11, 22, tzinfo=timezone.utc).date()
+    sample_tasks = [
+        SimpleNamespace(priority="High", status="In progress", due_date=today - timedelta(days=1)),
+        SimpleNamespace(priority="High", status="Completed", due_date=today),
+        SimpleNamespace(priority="Medium", status="Not started", due_date=today),
+    ]
+    w = summarize_task_workload(sample_tasks, today=today)
+    assert w["total_tasks"] == 3
+    assert w["completed_tasks"] == 1
+    assert w["pending_tasks"] == 2
+    assert w["completion_rate_pct"] == 33.3
+    assert w["overdue_tasks"] == 1
+    assert w["due_today_tasks"] == 1
+    assert w["high_priority_pending"] == 1
+    assert w["priority_breakdown"]["High"] == 2
+
+
+    mock_tasks = [
+        SimpleNamespace(priority="High", status="In progress"),
+        SimpleNamespace(priority="High", status="Completed"),
+        SimpleNamespace(priority="Low", status="Not started"),
+    ]
+    prio = summarize_task_priorities(mock_tasks)
+    assert prio["total_tasks"] == 3
+    assert prio["completed_tasks"] == 1
+    assert prio["completion_rate_pct"] == 33.3
+    assert prio["by_priority"]["High"]["pending"] == 1
+    assert prio["by_priority"]["High"]["completed"] == 1
+    assert prio["by_priority"]["Low"]["pending"] == 1
+
 
 
 
@@ -110,4 +145,12 @@ def test_health_and_auth_flow():
     assert target_json["completed_credits"] == 7.0
     assert target_json["required_credits"] == 3.0
     assert target_json["achievable"] is True
+
+    prio_res = client.get("/api/tasks/priority-breakdown")
+    assert prio_res.status_code == 200
+    prio_json = prio_res.get_json()
+    assert prio_json["total_tasks"] == 2
+    assert prio_json["by_priority"]["High"]["pending"] == 1
+    assert prio_json["by_priority"]["Medium"]["pending"] == 1
+
 
