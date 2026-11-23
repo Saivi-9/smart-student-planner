@@ -7,6 +7,7 @@ from app import (
     calculate_target_gpa_credits,
     get_academic_standing,
     parse_date,
+    summarize_grade_distribution,
     summarize_task_priorities,
     summarize_task_workload,
 )
@@ -35,6 +36,15 @@ def test_calculate_gpa_and_academic_standing():
     assert calculate_target_gpa_credits(entries, 3.7, "A") == 3.0
     assert calculate_target_gpa_credits(entries, 3.5, "A") == 0.0
     assert calculate_target_gpa_credits(entries, 4.0, "A") is None
+
+    dist = summarize_grade_distribution(entries)
+    assert dist["courses_count"] == 2
+    assert dist["total_credits"] == 7.0
+    assert dist["honors_credits"] == 4.0
+    assert dist["satisfactory_credits"] == 3.0
+    assert dist["at_risk_credits"] == 0.0
+    assert dist["letter_counts"] == {"A": 1, "B": 1}
+
 
 
 def test_summarize_task_workload():
@@ -152,5 +162,16 @@ def test_health_and_auth_flow():
     assert prio_json["total_tasks"] == 2
     assert prio_json["by_priority"]["High"]["pending"] == 1
     assert prio_json["by_priority"]["Medium"]["pending"] == 1
+
+    dist_res = client.get("/api/grades/distribution")
+    assert dist_res.status_code == 200
+    dist_json = dist_res.get_json()
+    assert dist_json["courses_count"] == 2
+    assert dist_json["total_credits"] == 7.0
+    assert dist_json["honors_credits"] == 4.0
+    assert dist_json["satisfactory_credits"] == 3.0
+    assert dist_json["at_risk_credits"] == 0.0
+    assert dist_json["letter_counts"] == {"A": 1, "B": 1}
+
 
 

@@ -134,6 +134,43 @@ def summarize_task_priorities(tasks):
     }
 
 
+def summarize_grade_distribution(entries):
+    """Aggregate letter-grade frequency, credit tiers (honors/satisfactory/at-risk), and GPA metrics."""
+    by_letter = {}
+    honors_credits = 0.0
+    satisfactory_credits = 0.0
+    at_risk_credits = 0.0
+    total_credits = 0.0
+
+    for entry in entries:
+        letter = (getattr(entry, "grade", "") or "").strip().upper()
+        credits = float(getattr(entry, "credits", 0.0) or 0.0)
+        if credits <= 0 or letter not in GRADE_POINTS:
+            continue
+        pts = GRADE_POINTS[letter]
+        by_letter[letter] = by_letter.get(letter, 0) + 1
+        total_credits += credits
+        if pts >= 3.7:
+            honors_credits += credits
+        elif pts >= 2.0:
+            satisfactory_credits += credits
+        else:
+            at_risk_credits += credits
+
+    gpa_val = calculate_gpa(entries)
+    return {
+        "courses_count": len(entries),
+        "total_credits": round(total_credits, 2),
+        "gpa": gpa_val,
+        "academic_standing": get_academic_standing(gpa_val, len(entries)),
+        "honors_credits": round(honors_credits, 2),
+        "satisfactory_credits": round(satisfactory_credits, 2),
+        "at_risk_credits": round(at_risk_credits, 2),
+        "letter_counts": by_letter,
+    }
+
+
+
 
 
 def create_app(test_config=None):
@@ -430,6 +467,12 @@ def create_app(test_config=None):
     def api_tasks_priority_breakdown():
         tasks = Task.query.filter_by(user_id=current_user.id).all()
         return jsonify(summarize_task_priorities(tasks))
+
+    @app.route("/api/grades/distribution")
+    @login_required
+    def api_grades_distribution():
+        grades = Grade.query.filter_by(user_id=current_user.id).all()
+        return jsonify(summarize_grade_distribution(grades))
 
     return app
 
