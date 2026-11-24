@@ -170,6 +170,47 @@ def summarize_grade_distribution(entries):
     }
 
 
+def get_overdue_tasks_summary(tasks, today=None):
+    """Collect and rank incomplete overdue tasks by days overdue and priority urgency."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    overdue_items = []
+    high_priority_overdue = 0
+
+    for t in tasks:
+        status_str = (getattr(t, "status", "") or "").strip()
+        if status_str.lower() == "completed":
+            continue
+        due = getattr(t, "due_date", None)
+        if not due or due >= today:
+            continue
+
+        days_overdue = (today - due).days
+        priority_str = (getattr(t, "priority", "Medium") or "Medium").strip().capitalize()
+        if priority_str == "High":
+            high_priority_overdue += 1
+
+        overdue_items.append({
+            "id": getattr(t, "id", None),
+            "title": getattr(t, "title", ""),
+            "due_date": due.isoformat(),
+            "days_overdue": days_overdue,
+            "priority": priority_str,
+            "status": status_str,
+        })
+
+    overdue_items.sort(key=lambda item: (-item["days_overdue"], item["title"]))
+    max_overdue = overdue_items[0]["days_overdue"] if overdue_items else 0
+    return {
+        "overdue_count": len(overdue_items),
+        "high_priority_overdue_count": high_priority_overdue,
+        "max_days_overdue": max_overdue,
+        "tasks": overdue_items,
+    }
+
+
+
 
 
 
@@ -473,6 +514,12 @@ def create_app(test_config=None):
     def api_grades_distribution():
         grades = Grade.query.filter_by(user_id=current_user.id).all()
         return jsonify(summarize_grade_distribution(grades))
+
+    @app.route("/api/tasks/overdue")
+    @login_required
+    def api_tasks_overdue():
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        return jsonify(get_overdue_tasks_summary(tasks))
 
     return app
 

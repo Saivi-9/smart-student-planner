@@ -6,6 +6,7 @@ from app import (
     calculate_gpa,
     calculate_target_gpa_credits,
     get_academic_standing,
+    get_overdue_tasks_summary,
     parse_date,
     summarize_grade_distribution,
     summarize_task_priorities,
@@ -77,6 +78,19 @@ def test_summarize_task_workload():
     assert prio["by_priority"]["High"]["pending"] == 1
     assert prio["by_priority"]["High"]["completed"] == 1
     assert prio["by_priority"]["Low"]["pending"] == 1
+
+    overdue_summary = get_overdue_tasks_summary(
+        [
+            SimpleNamespace(id=1, title="Lab Report", priority="High", status="In progress", due_date=today - timedelta(days=3)),
+            SimpleNamespace(id=2, title="Quiz Prep", priority="Medium", status="Completed", due_date=today - timedelta(days=5)),
+        ],
+        today=today,
+    )
+    assert overdue_summary["overdue_count"] == 1
+    assert overdue_summary["high_priority_overdue_count"] == 1
+    assert overdue_summary["max_days_overdue"] == 3
+    assert overdue_summary["tasks"][0]["title"] == "Lab Report"
+
 
 
 
@@ -172,6 +186,15 @@ def test_health_and_auth_flow():
     assert dist_json["satisfactory_credits"] == 3.0
     assert dist_json["at_risk_credits"] == 0.0
     assert dist_json["letter_counts"] == {"A": 1, "B": 1}
+
+    overdue_res = client.get("/api/tasks/overdue")
+    assert overdue_res.status_code == 200
+    overdue_json = overdue_res.get_json()
+    assert overdue_json["overdue_count"] == 1
+    assert overdue_json["max_days_overdue"] == 2
+    assert overdue_json["tasks"][0]["title"] == "Past Due Reading"
+    assert overdue_json["tasks"][0]["days_overdue"] == 2
+
 
 
 
