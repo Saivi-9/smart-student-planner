@@ -210,6 +210,45 @@ def get_overdue_tasks_summary(tasks, today=None):
     }
 
 
+def get_due_today_tasks_summary(tasks, today=None):
+    """Collect incomplete tasks due today and rank them by priority urgency."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    priority_rank = {"High": 0, "Medium": 1, "Low": 2}
+    due_today_items = []
+    high_priority_due_today = 0
+
+    for t in tasks:
+        status_str = (getattr(t, "status", "") or "").strip()
+        if status_str.lower() == "completed":
+            continue
+        due = getattr(t, "due_date", None)
+        if not due or due != today:
+            continue
+
+        priority_str = (getattr(t, "priority", "Medium") or "Medium").strip().capitalize()
+        if priority_str == "High":
+            high_priority_due_today += 1
+
+        due_today_items.append({
+            "id": getattr(t, "id", None),
+            "title": getattr(t, "title", ""),
+            "due_date": due.isoformat(),
+            "priority": priority_str,
+            "status": status_str,
+        })
+
+    due_today_items.sort(key=lambda item: (priority_rank.get(item["priority"], 1), item["title"]))
+    return {
+        "date": today.isoformat(),
+        "due_today_count": len(due_today_items),
+        "high_priority_due_today_count": high_priority_due_today,
+        "tasks": due_today_items,
+    }
+
+
+
 
 
 
@@ -520,6 +559,12 @@ def create_app(test_config=None):
     def api_tasks_overdue():
         tasks = Task.query.filter_by(user_id=current_user.id).all()
         return jsonify(get_overdue_tasks_summary(tasks))
+
+    @app.route("/api/tasks/due-today")
+    @login_required
+    def api_tasks_due_today():
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        return jsonify(get_due_today_tasks_summary(tasks))
 
     return app
 
