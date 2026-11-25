@@ -6,6 +6,7 @@ from app import (
     calculate_gpa,
     calculate_target_gpa_credits,
     get_academic_standing,
+    get_due_today_tasks_summary,
     get_overdue_tasks_summary,
     parse_date,
     summarize_grade_distribution,
@@ -90,6 +91,19 @@ def test_summarize_task_workload():
     assert overdue_summary["high_priority_overdue_count"] == 1
     assert overdue_summary["max_days_overdue"] == 3
     assert overdue_summary["tasks"][0]["title"] == "Lab Report"
+
+    due_today_summary = get_due_today_tasks_summary(
+        [
+            SimpleNamespace(id=3, title="Problem Set 4", priority="High", status="In progress", due_date=today),
+            SimpleNamespace(id=4, title="Reading Notes", priority="Low", status="Not started", due_date=today),
+            SimpleNamespace(id=5, title="Done Quiz", priority="High", status="Completed", due_date=today),
+        ],
+        today=today,
+    )
+    assert due_today_summary["due_today_count"] == 2
+    assert due_today_summary["high_priority_due_today_count"] == 1
+    assert due_today_summary["tasks"][0]["title"] == "Problem Set 4"
+
 
 
 
@@ -194,6 +208,23 @@ def test_health_and_auth_flow():
     assert overdue_json["max_days_overdue"] == 2
     assert overdue_json["tasks"][0]["title"] == "Past Due Reading"
     assert overdue_json["tasks"][0]["days_overdue"] == 2
+
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    client.post("/tasks/new", data={
+        "title": "Due Today Lab Quiz",
+        "description": "Timed quiz",
+        "due_date": today_iso,
+        "priority": "High",
+        "status": "In progress",
+    }, follow_redirects=True)
+
+    due_today_res = client.get("/api/tasks/due-today")
+    assert due_today_res.status_code == 200
+    due_today_json = due_today_res.get_json()
+    assert due_today_json["due_today_count"] == 1
+    assert due_today_json["high_priority_due_today_count"] == 1
+    assert due_today_json["tasks"][0]["title"] == "Due Today Lab Quiz"
+
 
 
 
