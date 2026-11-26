@@ -248,6 +248,42 @@ def get_due_today_tasks_summary(tasks, today=None):
     }
 
 
+def get_completed_tasks_summary(tasks):
+    """Collect completed tasks, rank by priority tier, and compute overall completion rate."""
+    priority_rank = {"High": 0, "Medium": 1, "Low": 2}
+    completed_items = []
+    high_priority_completed = 0
+
+    for t in tasks:
+        status_str = (getattr(t, "status", "") or "").strip()
+        if status_str.lower() != "completed":
+            continue
+
+        priority_str = (getattr(t, "priority", "Medium") or "Medium").strip().capitalize()
+        if priority_str == "High":
+            high_priority_completed += 1
+
+        due = getattr(t, "due_date", None)
+        completed_items.append({
+            "id": getattr(t, "id", None),
+            "title": getattr(t, "title", ""),
+            "due_date": due.isoformat() if due else "",
+            "priority": priority_str,
+            "status": status_str,
+        })
+
+    completed_items.sort(key=lambda item: (priority_rank.get(item["priority"], 1), item["title"]))
+    total_count = len(tasks)
+    completion_pct = round((len(completed_items) / total_count) * 100.0, 1) if total_count > 0 else 0.0
+    return {
+        "total_tasks": total_count,
+        "completed_count": len(completed_items),
+        "high_priority_completed_count": high_priority_completed,
+        "completion_rate_pct": completion_pct,
+        "tasks": completed_items,
+    }
+
+
 
 
 
@@ -565,6 +601,12 @@ def create_app(test_config=None):
     def api_tasks_due_today():
         tasks = Task.query.filter_by(user_id=current_user.id).all()
         return jsonify(get_due_today_tasks_summary(tasks))
+
+    @app.route("/api/tasks/completed")
+    @login_required
+    def api_tasks_completed():
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        return jsonify(get_completed_tasks_summary(tasks))
 
     return app
 
