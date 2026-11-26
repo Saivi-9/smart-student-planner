@@ -6,6 +6,7 @@ from app import (
     calculate_gpa,
     calculate_target_gpa_credits,
     get_academic_standing,
+    get_completed_tasks_summary,
     get_due_today_tasks_summary,
     get_overdue_tasks_summary,
     parse_date,
@@ -103,6 +104,17 @@ def test_summarize_task_workload():
     assert due_today_summary["due_today_count"] == 2
     assert due_today_summary["high_priority_due_today_count"] == 1
     assert due_today_summary["tasks"][0]["title"] == "Problem Set 4"
+
+    completed_summary = get_completed_tasks_summary(
+        [
+            SimpleNamespace(id=5, title="Done Quiz", priority="High", status="Completed", due_date=today),
+            SimpleNamespace(id=6, title="Active Lab", priority="Medium", status="In progress", due_date=today),
+        ]
+    )
+    assert completed_summary["completed_count"] == 1
+    assert completed_summary["high_priority_completed_count"] == 1
+    assert completed_summary["completion_rate_pct"] == 50.0
+    assert completed_summary["tasks"][0]["title"] == "Done Quiz"
 
 
 
@@ -224,6 +236,21 @@ def test_health_and_auth_flow():
     assert due_today_json["due_today_count"] == 1
     assert due_today_json["high_priority_due_today_count"] == 1
     assert due_today_json["tasks"][0]["title"] == "Due Today Lab Quiz"
+
+    client.post("/tasks/new", data={
+        "title": "Completed Capstone Milestone",
+        "description": "Submitted final draft",
+        "due_date": today_iso,
+        "priority": "High",
+        "status": "Completed",
+    }, follow_redirects=True)
+
+    completed_res = client.get("/api/tasks/completed")
+    assert completed_res.status_code == 200
+    completed_json = completed_res.get_json()
+    assert completed_json["completed_count"] == 1
+    assert completed_json["high_priority_completed_count"] == 1
+    assert completed_json["tasks"][0]["title"] == "Completed Capstone Milestone"
 
 
 
