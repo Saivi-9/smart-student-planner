@@ -8,6 +8,7 @@ from app import (
     get_academic_standing,
     get_completed_tasks_summary,
     get_due_today_tasks_summary,
+    get_high_priority_focus_queue,
     get_overdue_tasks_summary,
     parse_date,
     summarize_grade_distribution,
@@ -115,6 +116,19 @@ def test_summarize_task_workload():
     assert completed_summary["high_priority_completed_count"] == 1
     assert completed_summary["completion_rate_pct"] == 50.0
     assert completed_summary["tasks"][0]["title"] == "Done Quiz"
+
+    focus_queue = get_high_priority_focus_queue(
+        [
+            SimpleNamespace(id=7, title="Urgent Exam Review", priority="High", status="In progress", due_date=today + timedelta(days=1)),
+            SimpleNamespace(id=8, title="Overdue Capstone", priority="High", status="Not started", due_date=today - timedelta(days=2)),
+            SimpleNamespace(id=9, title="Routine Reading", priority="Low", status="Not started", due_date=today),
+        ],
+        today=today,
+    )
+    assert focus_queue["high_priority_pending_count"] == 2
+    assert focus_queue["overdue_high_priority_count"] == 1
+    assert focus_queue["next_urgent_task"] == "Overdue Capstone"
+
 
 
 
@@ -251,6 +265,13 @@ def test_health_and_auth_flow():
     assert completed_json["completed_count"] == 1
     assert completed_json["high_priority_completed_count"] == 1
     assert completed_json["tasks"][0]["title"] == "Completed Capstone Milestone"
+
+    focus_res = client.get("/api/tasks/high-priority-focus")
+    assert focus_res.status_code == 200
+    focus_json = focus_res.get_json()
+    assert focus_json["high_priority_pending_count"] == 2
+    assert focus_json["next_urgent_task"] == "Due Today Lab Quiz"
+
 
 
 

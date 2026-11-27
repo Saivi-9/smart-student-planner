@@ -284,6 +284,45 @@ def get_completed_tasks_summary(tasks):
     }
 
 
+def get_high_priority_focus_queue(tasks, today=None):
+    """Return incomplete High-priority tasks ordered by earliest due date with days-remaining telemetry."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    focus_items = []
+    overdue_high = 0
+    for t in tasks:
+        status_str = (getattr(t, "status", "") or "").strip()
+        if status_str.lower() == "completed":
+            continue
+        priority_str = (getattr(t, "priority", "Medium") or "Medium").strip().capitalize()
+        if priority_str != "High":
+            continue
+
+        due = getattr(t, "due_date", None)
+        days_until_due = (due - today).days if due else None
+        if days_until_due is not None and days_until_due < 0:
+            overdue_high += 1
+
+        focus_items.append({
+            "id": getattr(t, "id", None),
+            "title": getattr(t, "title", ""),
+            "due_date": due.isoformat() if due else "",
+            "days_until_due": days_until_due,
+            "priority": "High",
+            "status": status_str,
+        })
+
+    focus_items.sort(key=lambda item: (item["days_until_due"] is None, item["days_until_due"] if item["days_until_due"] is not None else 999999, item["title"]))
+    return {
+        "high_priority_pending_count": len(focus_items),
+        "overdue_high_priority_count": overdue_high,
+        "next_urgent_task": focus_items[0]["title"] if focus_items else None,
+        "tasks": focus_items,
+    }
+
+
+
 
 
 
@@ -607,6 +646,12 @@ def create_app(test_config=None):
     def api_tasks_completed():
         tasks = Task.query.filter_by(user_id=current_user.id).all()
         return jsonify(get_completed_tasks_summary(tasks))
+
+    @app.route("/api/tasks/high-priority-focus")
+    @login_required
+    def api_tasks_high_priority_focus():
+        tasks = Task.query.filter_by(user_id=current_user.id).all()
+        return jsonify(get_high_priority_focus_queue(tasks))
 
     return app
 
